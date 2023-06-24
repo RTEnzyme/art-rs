@@ -262,6 +262,53 @@ impl<K: Key, V> Art<K, V> {
         None
     }
 
+    /// Get value and matched key length
+    /// Return `Some((V, length))` if matched, otherwise `None`.
+    pub fn get_with_length(&self, key: &K) -> Option<(&V, usize)> {
+        let key_vec = key.to_bytes();
+        assert!(
+            !key_vec.is_empty(),
+            "Key must have non empty byte string representation",
+        );
+
+        let mut node = self.root.as_ref();
+        let mut key_bytes = key_vec.as_slice();
+        let mut matched_len = 0;
+        let key_ro_buffer = key_bytes;
+        while let Some(typed_node) = node {
+            match typed_node {
+                TypedNode::Leaf(leaf) => {
+                    let leaf_key = leaf.key.to_bytes();
+                    if leaf_key == key_ro_buffer[..leaf_key.len()] {
+                        matched_len = leaf_key.len();
+                        return Some((&leaf.value, matched_len))
+                    } else {
+                        return None
+                    }
+                }
+                TypedNode::Interim(interim) => {
+                    if let Some((next_node, rem_key_bytes, _)) =
+                        Self::find_in_interim(interim, key_bytes) {
+                            node = Some(next_node);
+                            key_bytes = rem_key_bytes;
+                        } else {
+                            node = None;
+                        }
+                }
+                TypedNode::Combined(interim, leaf) => {
+                    let leaf_key = leaf.key.to_bytes();
+                    if leaf_key == key_ro_buffer[..leaf_key.len()] {
+                        matched_len = leaf_key.len();
+                        return Some((&leaf.value, matched_len));
+                    } else {
+                        node = Some(interim)
+                    }
+                }
+            }
+        }
+        None
+    }
+
     /// Execute tree range scan.  
     pub fn range(&self, range: impl RangeBounds<K>) -> impl DoubleEndedIterator<Item = (&K, &V)>
     where
@@ -1238,5 +1285,16 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn get_with_length()  {
+        let mut art = Art::new();
+        assert!(art.insert(ByteString::new(&[0x34, 0x22, 0x43]), 1));
+        assert!(art.insert(ByteString::new(&[0x34, 0x23, 0x44]), 2));
+        assert_eq!(art.get_with_length(&ByteString::new(&[0x34, 0x22, 0x43, 0x55])), Some((&1, 3)));
+
+        assert!(art.insert(ByteString::new(&[0x34, 0x22]), 3));
+        assert_eq!(art.get_with_length(&ByteString::new(&[0x34, 0x22])), Some((&3, 2)));
     }
 }
