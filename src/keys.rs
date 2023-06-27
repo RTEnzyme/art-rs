@@ -31,6 +31,10 @@ impl ByteString {
             bytes: bytes.to_vec(),
         }
     }
+
+    pub fn as_bytes(&self) -> &Vec<u8> {
+        &self.bytes
+    }
 }
 
 impl Borrow<[u8]> for ByteString {

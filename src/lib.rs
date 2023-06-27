@@ -275,6 +275,7 @@ impl<K: Key, V> Art<K, V> {
         let mut key_bytes = key_vec.as_slice();
         let mut matched_len = 0;
         let key_ro_buffer = key_bytes;
+        let mut tmp_res: Option<(&V, usize)> = None;
         while let Some(typed_node) = node {
             match typed_node {
                 TypedNode::Leaf(leaf) => {
@@ -283,7 +284,7 @@ impl<K: Key, V> Art<K, V> {
                         matched_len = leaf_key.len();
                         return Some((&leaf.value, matched_len))
                     } else {
-                        return None
+                        return tmp_res
                     }
                 }
                 TypedNode::Interim(interim) => {
@@ -299,7 +300,12 @@ impl<K: Key, V> Art<K, V> {
                     let leaf_key = leaf.key.to_bytes();
                     if leaf_key == key_ro_buffer[..leaf_key.len()] {
                         matched_len = leaf_key.len();
-                        return Some((&leaf.value, matched_len));
+                        if matched_len == key_ro_buffer.len() {
+                            return Some((&leaf.value, matched_len));
+                        } else {
+                            tmp_res = Some((&leaf.value, matched_len));
+                            node = Some(interim)
+                        }
                     } else {
                         node = Some(interim)
                     }
